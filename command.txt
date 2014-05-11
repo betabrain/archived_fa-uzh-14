@@ -1,0 +1,2 @@
+for i in {1000..800000..1000}; do python batch.py $i 1>>statistics.batch.txt 2>"logs/batch.$i.txt"; done;
+

@@ -1,0 +1,55 @@
+\begin{algorithm}[H]
+\caption{{\sc Batch($\bar B_{input}$)}}
+\begin{algorithmic}
+
+\REQUIRE $\bar B_{input}$: Set of blocks. \\
+\STATE $\bar E$: List of edges (including duplicates). \\
+\STATE // Graph construction:
+
+\FOR{$\bar b$ in $\bar B_{input}$}
+  \FOR{$pair$ in all combinations in $\bar b$}
+    \STATE add $pair$ to $\bar E$.
+  \ENDFOR
+\ENDFOR
+
+\STATE sort $\bar E$.
+
+\STATE $N_{distinct}$ = 1.
+\STATE $pair_{last}$ = $\bar E_{0}$.
+\STATE $W_{total}$ = 1.
+
+\FOR{$pair$ in $\bar E_{1..N}$}
+  \IF{$pair$ = $pair_{last}$}
+    \STATE $W_{total}$ = $W_{total}$ + 1.
+  \ELSE
+    \STATE $W_{total}$ = $W_{total}$ + 1.
+    \STATE $N_{distinct}$ = $N_{distinct}$ + 1.
+    \STATE $pair_{last}$ = $pair$;
+  \ENDIF
+\ENDFOR
+
+\STATE // Graph pruning:
+\STATE $W_{average}$ = $W_{total}$ / $N_{distinct}$.
+
+\STATE $pair_{last}$ = $\bar E_{0}$.
+\STATE $W_{pair}$ = 1.
+
+\FOR{$pair$ in $\bar E_{1..N}$}
+  \IF{$pair$ = $pair_{last}$}
+    \STATE $W_{pair}$ = $W_{pair}$ + 1.
+  \ELSE
+    \IF{$W_{pair}$ $\geq$ $W_{average}$}
+      \STATE add $pair$ to $\bar B_{output}$.
+    \ENDIF
+    \STATE $W_{pair}$ = 1.
+    \STATE $pair_{last}$ = $pair$.
+  \ENDIF
+\ENDFOR
+\IF{$W_{pair}$ $\geq$ $W_{average}$}
+  \STATE add $pair$ to $\bar B_{output}$.
+\ENDIF
+
+\RETURN $\bar B_{output}$. \\
+
+\end{algorithmic}
+\end{algorithm}

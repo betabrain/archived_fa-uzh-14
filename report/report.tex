@@ -1,0 +1,382 @@
+\documentclass[a4paper,12pt]{article}
+
+\usepackage{pgfplots}
+\usepackage{algorithm}
+\usepackage{algorithmic}
+\usepackage{amsmath}
+\usepackage{graphicx}
+\usepackage{color}
+\usepackage{multirow}
+\usepackage{tablefootnote}
+\usepackage{listings}
+
+\lstset{breaklines=true,numbers=left,basicstyle=\footnotesize}
+
+\usepackage{xeCJK}
+
+\setCJKmainfont{Hiragino Mincho Pro} % for Cn & Jp
+\setCJKmonofont{AppleMyungjo} % for Kr
+
+\restylefloat{figure}
+
+\pgfplotsset{compat=1.10}
+
+\renewcommand{\algorithmicrequire}{\textbf{Input:}}
+\renewcommand{\algorithmicensure}{\textbf{Output:}}
+
+\begin{document}
+
+\title{Applying Meta-Blocking to Improve Efficiency in Entity Resolution}
+\author{
+  Tobias Ammann\\
+  \texttt{tag@adnm.ch}}
+
+\date{\today}
+\maketitle
+
+\begin{abstract}
+This paper compares two implementations of meta-blocking in terms of runtime and memory usage, and measures the accuracy of meta-blocking using a subset of the Musicbrainz database. We find that the implementation using a reversed index is more efficient than the naive implementation. Furthermore, we find that the dataset in its current form is unsuitable for meta-blocking, due to incomplete records and the presence of high-frequency tokens, which cause both implementations to approach $O(n^{2})$ runtime and memory consumption ($n$ being the number of records).
+\end{abstract}
+
+\section{Introduction}
+Real world datasets often contain duplicate records representing the same entity. There are many reasons for this: data entry mistakes, merging of different data sources, etc. The task of finding these duplicates is called entity resolution (ER). The main problem of ER is its runtime complexity of $O(n^{2})$ ($n$ being the number of records), which makes it impractical to exhaustively compare all records with each other. The runtime cost can be improved by intelligently dividing records into blocks and only comparing records within the same block.
+One way to create such blocks is to assign all entities that share the same token to the same block, e.g. John Smith, Joe Smith, and Fred Smith are all assigned to the block "Smith". Meta-blocking \cite{10.1109/TKDE.2013.54} is an additional step that is inserted between the creation of the blocks and comparing the entities. Meta-blocking transforms one set of blocks into another set of blocks to further improve the efficiency of any blocking algorithm.
+
+\section{Meta-Blocking}
+The input to meta-blocking is a set of blocks. Each block is itself a set of entities and represents some kind of connection between the entities in the set, e.g. the same surname. The output of meta-blocking is a list of entity pairs that are promising candidates for a comparison. These pairs can be viewed a independent blocks, one block per entity pair.
+
+Meta-blocking aims to increase the efficiency of blocking ER by reducing redundancy present in the input blocks. This is done using three ideas: graphs, weighting, pruning.
+\begin{enumerate}
+  \item Meta-blocking uses a graph to represent the entity-to-block relationships. Vertices represent entities that are connected by weighted edges if the entities share one or more blocks.
+  \item The weight of an edge is computed as the number of blocks that two entities share. Hence sharing multiple blocks results in a higher likelihood of being included in the output.
+  \item All edges with a below average weight are pruned from the graph, which only leaves the more similar entities for further consideration.
+\end{enumerate}
+
+
+In the remainder of section 2 we present two different implementations of meta-blocking: The first implementation, $BATCH$, creates the graph in a naive way. The second implementation, $REVIDX$, processes the data with the help of an inverted index.
+
+\subsection{Batch Processing Implementation}
+Given a set $\bar B$ of blocks, BATCH generates a graph $G(E, N)$ and prunes $G$ as follows:
+\begin{enumerate}
+  \item Let $\bar E$ be a bag of sorted edges. For each block in $\bar B$, insert all entity pairs in $\bar E$. Keep the two entities $e_{1}$ and $e_{2}$ in each pair sorted ($e_{1} < e_{2}$) to avoid duplicates.
+  \item Scan $\bar E$ to compute the average edge weight $W_{avg}$ by dividing the number of entity pairs in $\bar E$ by the number of distinct edges: $W_{avg} = \frac{\lvert \bar E \rvert}{N_{distinct}}$.
+  \item Scan $\bar E$ to output all distinct edges whose frequency is above average ($W_{pair} \geq W_{avg}$).
+\end{enumerate}
+
+\begin{algorithm}[H]
+\caption{{\sc Batch($\bar B_{input}$)}}
+\begin{algorithmic}
+\REQUIRE $\bar B_{input}$.
+\ENSURE $\bar B_{output}$.
+\STATE $\bar E$: Bag of edges (including duplicates).
+
+\STATE \texttt{// Graph construction:}
+\STATE $\bar E$ = all entity pairs of all blocks in $\bar B$.
+\STATE sort $\bar E$.
+
+\STATE $N_{distinct}$ = 1
+\STATE $pair_{last}$ = $\bar E_{0}$
+
+\FOR{$pair$ in $\bar E_{1..N}$}
+  \IF{$pair \neq pair_{last}$}
+    \STATE $N_{distinct}$++
+    \STATE $pair_{last}$ = $pair$
+  \ENDIF
+\ENDFOR
+
+\STATE \texttt{// Graph pruning:}
+\STATE $W_{avg} = \frac{\lvert \bar E \rvert}{N_{distinct}}$
+
+\STATE $pair_{last}$ = $\bar E_{0}$.
+\STATE $W_{pair}$ = 1.
+
+\FOR{$pair$ in $\bar E_{1..N}$}
+  \IF{$pair \neq pair_{last}$}
+    \IF{$W_{pair} \geq W_{avg}$}
+      \STATE add $pair$ to $\bar B_{output}$.
+    \ENDIF
+    \STATE $W_{pair}$ = 0
+    \STATE $pair_{last}$ = $pair$
+  \ENDIF
+  \STATE $W_{pair}$++
+\ENDFOR
+\IF{$W_{pair} \geq W_{avg}$}
+  \STATE add $pair$ to $\bar B_{output}$.
+\ENDIF
+
+\RETURN $\bar B_{output}$. \\
+
+\end{algorithmic}
+\end{algorithm}
+
+\subsection{Reverse Index Implementation}
+The $REVIDX$ implementation is based on \cite{10.1109/TKDE.2013.54}. $REVIDX$ does not keep track of the entire graph. Instead, it works on each input block separately. First, it calculates the weight of all edges and the number of distinct edges in a given block to compute the average weight. It then does a second scan during which it again calculates each edge weight and then adds all edges with an above average weight to the list of output blocks.
+
+In order for the edge weight calculation to be efficient, $REVIDX$ uses a reversed index $\bar R$ to store the blocks associated with each entity. It ensures the correct computation by iterating through the blocks in sorted order, and by keeping each entity's blocks in the reversed index in the same order. With these constraints on ordering, $REVIDX$ can avoid keeping track of all edges.
+
+\begin{algorithm}[H]
+\caption{{\sc GetWeight($b$, $\bar R$, $pair$)}}
+\begin{algorithmic}
+\REQUIRE $b$ (current block), $\bar R$, $pair$.
+\ENSURE $W_{pair}$.
+  \FOR{$b_{i} \in \bar R_{pair_{0}}$}
+    \FOR{$b_{j} \in \bar R_{pair_{1}}$}
+      \IF{$b_{i} = b_{j}$ and not compared before $b$.}
+        \STATE $W_{pair}$++
+      \ELSE
+        \RETURN -1
+      \ENDIF
+    \ENDFOR
+  \ENDFOR
+  \RETURN $W_{pair}$
+\end{algorithmic}
+\end{algorithm}
+
+\begin{algorithm}[H]
+\caption{{\sc ReverseIndex($\bar B_{input}$)}}
+\begin{algorithmic}
+\REQUIRE $\bar B_{input}$
+\ENSURE $\bar B_{output}$
+
+\STATE \texttt{// Reversed Index:}
+\STATE $\bar R$: Reversed Index storing each entity's blocks.
+
+\STATE \texttt{// Graph construction:}
+\STATE $W_{total} = 0$
+\STATE $N_{distinct} = 0$
+\FOR{$\bar b \in \bar B_{input}$ in sorted order}
+  \FOR{$pair \in \bar b$}
+    \STATE $W_{pair}$ = GetWeight($b$, $\bar R$, $pair$)
+    \IF{$w \neq -1$}
+      \STATE $W_{total}$ = $W_{total}$ + $W_{pair}$
+      \STATE $N_{distinct}$++
+    \ENDIF
+  \ENDFOR
+\ENDFOR
+
+\STATE \texttt{// Graph pruning:}
+\STATE $W_{avg}$ = $W_{total}$ / $N_{distinct}$
+\FOR{$\bar b \in \bar B_{input}$ in sorted order}
+  \FOR{$pair \in \bar b$}
+    \STATE $W_{pair}$ = GetWeight($b$, $R$, $pair$)
+    \IF{$W_{pair}$ $\geq$ $W_{avg}$}
+      \STATE add $pair$ to $\bar B_{output}$
+    \ENDIF
+  \ENDFOR
+\ENDFOR
+\RETURN $\bar B_{output}$ \\
+\end{algorithmic}
+\end{algorithm}
+
+\newpage
+\section{Evaluation}
+We ran both implementations on a real-world dataset to measure accuracy, runtime, and memory usage.
+
+\subsection{Dataset}
+The dataset used to analyse both implementations is a subset of the Musicbrainz database. Each record in the dataset describes an artist by \emph{name, type, area, gender, comment, begin year}, and \emph{end year}. Additionally, each record contains an attribute \emph{cluster} that identifies records that describe the same artist. To create the input blocks, the text of each input field was tokenised to yield single word tokens. The following table shows how the blocks are distributed depending on the size of the dataset.
+
+\begin{center}
+\scalebox{0.90}{\input{dataset-table.tex}} \\
+\end{center}
+
+\subsubsection{Notes and Observation on the Dataset}
+\begin{enumerate}
+  \item \emph{1-E. / B.} is the number of blocks which only contain one entity. These blocks create no edges and are discarded during meta-blocking. On average $73.21\%$ of blocks are discarded.
+  \item The decreasing average number of blocks per entity hints at a large number of sparse records. Given the number of fields in the dataset, we expect a lower bound of $6$ blocks per entity for complete records.
+  \item The increasing maximum and average block sizes indicates the presence of high frequency tokens. On average $58.03\%$ of all records share the largest block. 
+\end{enumerate}
+
+\newpage
+\subsection{Performance analysis}
+
+\subsubsection{Comparison of Runtime}
+We measured the runtime of BATCH for increments of $1000$ records up to $24000$. Above $24000$ BATCH runs out of memory. REVIDX was run up to $27000$ records.
+The runtime increased polynomially for both implementations, because of the growing average and maximum block size. REVIDX was more efficient than BATCH for any number of records. 
+
+\begin{center}
+\scalebox{0.85}{
+\begin{tikzpicture}
+  \begin{axis}[title=Overall Runtime, xlabel={$Records$}, ylabel={$Seconds$}, legend style={draw=none}, legend pos=north west]
+    \addplot[red, mark=+] table{statistics/BA-Overall-Runtime.Runtime};
+    \addlegendentry{BATCH}
+    \addplot[blue, mark=+] table{statistics/RI-Overall-Runtime.Runtime};
+    \addlegendentry{REVIDX}
+  \end{axis};
+\end{tikzpicture}}
+\end{center}
+
+\subsubsection{Comparison of Memory Usage}
+In terms of memory usage, BATCH required substantially more memory, because it keeps a sorted bag of all edges. REVIDX does not save any edges, thus its memory usage is dominated by the list of output blocks $\bar B_{output}$.
+
+\begin{center}
+\scalebox{0.85}{
+\begin{tikzpicture}
+  \begin{axis}[title=Overall Memory, xlabel={$Records$}, ylabel={$Bytes$}, legend style={draw=none}, legend pos=north west]
+    \addplot[red, mark=+] table{statistics/BA-Scoring.Memory};
+    \addlegendentry{BATCH}
+    \addplot[blue, mark=+] table{statistics/RI-Scoring.Memory};
+    \addlegendentry{REVIDX}
+  \end{axis}
+\end{tikzpicture}}
+\end{center}
+
+\subsubsection{Detailed Analysis of BATCH}
+The runtime of BATCH is dominated by the construction of the graph, i.e. inserting all edges into $\bar E$ (\emph{Graph}). \emph{Pruning} is fast because it only involves two linear scans of $\bar E$. Tokenising the records prior to meta-blocking is virtually free (\emph{Setup}). 
+
+\begin{center}
+\scalebox{0.85}{
+\begin{tikzpicture}
+  \begin{axis}[title=Runtime by Part (BATCH), xlabel={$Records$}, ylabel={$Seconds$}, legend style={draw=none}, legend pos=north west]
+    \addplot[red, mark=+] table{statistics/BA-Setup.Runtime};
+    \addlegendentry{Setup}
+    \addplot[blue, mark=+] table{statistics/BA-Graph.Runtime};
+    \addlegendentry{Graph}
+    \addplot[green, mark=+] table{statistics/BA-Pruning.Runtime};
+    \addlegendentry{Pruning}
+  \end{axis};
+\end{tikzpicture}}
+\end{center}
+
+The memory consumption of BATCH is also dominated by the construction of the \emph{Graph}. The later \emph{Pruning} stage, only consumes marginally more memory for $\bar B_{output}$. The small reduction in memory consumption above 25 K records is an artefact of the implementation of $\bar E$. \\
+
+\begin{center}
+\scalebox{0.85}{
+\begin{tikzpicture}
+  \begin{axis}[title=Memory by Part (BATCH), xlabel={$Records$}, ylabel={$Bytes$}, legend style={draw=none}, legend pos=north west]
+    \addplot[red, mark=+] table{statistics/BA-Setup.Memory};
+    \addlegendentry{Setup}
+    \addplot[blue, mark=+] table{statistics/BA-Graph.Memory};
+    \addlegendentry{Graph}
+    \addplot[green, mark=+] table{statistics/BA-Pruning.Memory};
+    \addlegendentry{Pruning}
+  \end{axis};
+\end{tikzpicture}}
+\end{center}
+
+\newpage
+\subsubsection{Detailed Analysis of REVIDX}
+Tokenising the records (\emph{Setup}) and the creation of the reversed index (\emph{Rev. Idx.}) are very fast and negligible compared to the runtime cost of calculating the weight of each edge twice, once during the calculation of $W_{avg}$ and $N_{distinct}$ (\emph{Graph}) and once during \emph{Pruning}. Unlike BATCH, which stores the edge weights, REVIDX has to do duplicate work which slows down pruning. \\
+
+\begin{center}
+\scalebox{0.85}{
+\begin{tikzpicture}
+  \begin{axis}[title=Runtime by Part (REVIDX), xlabel={$Records$}, ylabel={$Seconds$}, legend style={draw=none}, legend pos=north west]
+    \addplot[red, mark=+] table{statistics/RI-Setup.Runtime};
+    \addlegendentry{Setup}
+    \addplot[orange, mark=+] table{statistics/RI-RevIdx.Runtime};
+    \addlegendentry{Rev. Idx.}
+    \addplot[blue, mark=+] table{statistics/RI-Graph.Runtime};
+    \addlegendentry{Graph}
+    \addplot[green, mark=+] table{statistics/RI-Pruning.Runtime};
+    \addlegendentry{Pruning}
+  \end{axis};
+\end{tikzpicture}}
+\end{center}
+
+In terms of memory usage, REVIDX requires very little memory until it stores the output blocks $\bar B_{output}$ (\emph{Pruning}). The memory usage for $\bar B_{output}$ depends on the dataset. The polynomial increase of memory usage during \emph{Pruning} is a consequence of the high number of false positive results.
+
+\begin{center}
+\scalebox{0.85}{
+\begin{tikzpicture}
+  \centering
+  \begin{axis}[title=Memory by Part (REVIDX), xlabel={$Records$}, ylabel={$Bytes$}, legend style={draw=none}, legend pos=north west]
+    \addplot[red, mark=+] table{statistics/RI-Setup.Memory};
+    \addlegendentry{Setup}
+    \addplot[orange, mark=+] table{statistics/RI-RevIdx.Memory};
+    \addlegendentry{Rev. Idx.}
+    \addplot[blue, mark=+] table{statistics/RI-Graph.Memory};
+    \addlegendentry{Graph}
+    \addplot[green, mark=+] table{statistics/RI-Pruning.Memory};
+    \addlegendentry{Pruning}
+  \end{axis};
+\end{tikzpicture}}
+\end{center}
+
+\newpage
+\subsection{Accuracy of the method}
+The quality of the output generated by meta-blocking was measured using $precision$, $recall$, and $f\text{-}measure$, by comparing $\bar B_{output}$ against a list of entity pairs generated using the \emph{cluster} attribute of the dataset.
+\begin{enumerate}
+  \item The \emph{Precision} measures how many of the returned results are actually correct, and is defined as: $Precision = \frac{N_{true\ positive}}{N_{true\ positive} \div N_{false\ positive}}$
+  \item The \emph{Recall} measures how many of the correct results are present in the output, and is defined as: $Recall = \frac{N_{true\ positive}}{N_{true\ positive} \div N_{false\ negative}}$
+  \item The F-Measure is defined as follows: $F\text{-}Measure = 2*\frac{Precision * Recall}{Precision + Recall}$
+\end{enumerate}
+
+F-measure was on average $0.00072$ for all from $1000$ to $27000$ records. Precision was on average $0.00036$. Recall increased with the size of the dataset, but stayed under $0.3$ with only one exception.
+
+\begin{center}
+\scalebox{0.85}{
+\begin{tikzpicture}
+  \begin{axis}[title=Accuracy Measures, xlabel={$Records$}, ylabel={$Measure$}, legend style={draw=none,at={(0.8,0.5)},anchor=north east}]
+    \addplot[red, mark=+] table{statistics/RI-Recall.Recall};
+    \addlegendentry{Recall}
+    \addplot[blue, mark=+] table{statistics/RI-Precision.Precision};
+    \addlegendentry{Precision}
+    \addplot[green, mark=+] table{statistics/RI-F-Measure.F-Measure};
+    \addlegendentry{F-Measure}
+  \end{axis};
+\end{tikzpicture}}
+\end{center}
+
+There comparatively high recall results from the number of false positives $N_{false\ positives}$ increasing polynomially with the size of the dataset.
+
+\begin{center}
+\scalebox{0.85}{
+\begin{tikzpicture}
+  \begin{axis}[title=Accuracy Counts, xlabel={$Records$}, ylabel={$N$}, legend style={draw=none}, legend pos=north west]
+    \addplot[red, mark=+] table{statistics/RI-True-Positives.N};
+    \addlegendentry{True positives}
+    \addplot[blue, mark=+] table{statistics/RI-False-Positives.N};
+    \addlegendentry{False positives}
+    \addplot[green, mark=+] table{statistics/RI-False-Negatives.N};
+    \addlegendentry{False negatives}
+  \end{axis};
+\end{tikzpicture}}
+\end{center}
+
+As can be seen in the example output tables below, some blocks are shared by a large number of unrelated entities, e.g. \emph{type, area}, and music terms in \emph{comment}. The rapidly growing maximum block size in the dataset confirms this. These blocks are what causes the number of false positives to grow polynomially with the number of records considered, and \emph{recall} to increase.
+
+Another problem observed in this dataset is that many records describing the same artist do not share any identifying blocks. Fantasy names, and sparse records mean that many duplicate records only share non-identifying information, e.g. Arthur Smith and Morgan Reno are the same artist, but since these are fake names, the two records only share \emph{type}.
+
+We also observe that many of the correctly discovered entity pairs were included in $\bar B_{output}$ on the basis of such non-identifying tokens rather than a more identifying attribute like \emph{name}.
+
+The example output tables below are based on the output of meta-blocking on $1000$ records.
+
+\subsubsection{Output: True Positives}
+
+\rotatebox{90}{\scalebox{0.65}{\input{tp-table.tex}}}
+
+\subsubsection{Output: False Positives}
+
+\rotatebox{90}{\scalebox{0.68}{\input{fp-table.tex}}}
+
+\subsubsection{Output: False Negatives}
+
+\rotatebox{90}{\scalebox{0.65}{\input{fn-table.tex}}}
+
+\section{Conclusion}
+Meta-blocking is very susceptible to problematic datasets. A few very common token and otherwise sparse records leads to the number of false positives growing polynomially with the number of records considered. Consequently, recall increases, but both precision and f-measure approach zero.
+
+Furthermore, the large number of false positives affects runtime and memory usage for both implementations. In the case of all records sharing one token, the performance of meta-blocking becomes equivalent to the worst-case for ER of $O(n^{2})$ (for $n$ records).
+
+REVIDX is a better implementation than BATCH in terms of runtime and memory consumption. However, neither implementation can handle the described problems of the dataset, since they are affected by it in the same way. Both implementation are still bound by the $O(n^{2})$ of the ER problem, and all differences are essentially constant factors.
+
+\bibliographystyle{plain}
+\bibliography{base}
+
+\appendix
+\section{Source Code}
+\subsection{Online Repository}
+
+\newpage
+\subsection{BATCH}
+\lstinputlisting[language=Python]{../batch.py}
+
+\newpage
+\subsection{REVIDX}
+\lstinputlisting[language=Python]{../revidx.py}
+
+\newpage
+\subsection{Description of Dataset}
+\lstinputlisting[language=Python]{../dataset.py}
+
+\end{document}

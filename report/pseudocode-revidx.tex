@@ -1,0 +1,63 @@
+\begin{algorithm}[H]
+\caption{{\sc GetWeight($b$, $R$, $pair$)}}
+\begin{algorithmic}
+\REQUIRE $R$: Reverse Index storing each entity's blocks \\
+         $b$: Block that is currently being worked on \\
+         $pair$: Entity pair. \\
+  \STATE $b_{0}$ = $R_{pair_{0}}$
+  \STATE $b_{1}$ = $R_{pair_{1}}$
+  \STATE $first$ = false.
+  \STATE $w$: Weight of the edge $pair$
+  \FOR{$i$ = 0 to $\lvert b_{0} \rvert$}
+    \FOR{$j$ = 0 to $\lvert b_{1} \rvert$}
+      \IF{$b_{0,i}$ = $b_{0,j}$}
+        \STATE $w$ = $w$ + 1
+        \IF{not $first$}
+          \STATE $first$ = true
+          \IF{$b_{0,i}$ != $b$}
+            \RETURN -1
+          \ENDIF
+        \ENDIF
+      \ENDIF
+    \ENDFOR
+  \ENDFOR
+  \RETURN $w$
+
+\end{algorithmic}
+\end{algorithm}
+
+\begin{algorithm}[H]
+\caption{{\sc ReverseIndex($\bar B_{input}$)}}
+\begin{algorithmic}
+
+\REQUIRE $\bar B_{input}$: Set of blocks \\
+
+\STATE // Setup:
+\STATE $R$: Reverse Index storing each entity's blocks
+
+\STATE // Graph construction:
+\FOR{$\bar b$ in $\bar B_{input}$ in sorted order}
+  \FOR{$pair$ in all entity combinations within $\bar b$ in sorted order}
+    \STATE $w$ = GetWeight($b$, $R$, $pair$)
+    \IF{$w$ != -1}
+      \STATE $W_{total}$ = $W_{total}$ + $w$
+      \STATE $N_{distinct}$ = $N_{distinct}$ + 1
+    \ENDIF
+  \ENDFOR
+\ENDFOR
+
+\STATE // Graph pruning:
+\STATE $W_{average}$ = $W_{total}$ / $N_{distinct}$
+\FOR{$\bar b$ in $\bar B_{input}$ in sorted order}
+  \FOR{$pair$ in all entity combinations within $\bar b$ in sorted order}
+    \STATE $w$ = GetWeight($b$, $R$, $pair$)
+    \IF{$w$ $\geq$ $W_{average}$}
+      \STATE add $pair$ to $\bar B_{output}$
+    \ENDIF
+  \ENDFOR
+\ENDFOR
+
+\RETURN $\bar B_{output}$ \\
+
+\end{algorithmic}
+\end{algorithm}

@@ -1,0 +1,9 @@
+*.sqlite3
+*.leveldb
+*.aux
+*.gz
+*.log
+*.bib
+*.bbl
+*.blg
+*.dvi
