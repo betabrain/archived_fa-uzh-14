@@ -27,18 +27,49 @@
 
 \begin{document}
 
+\begin{titlepage}
 \title{Applying Meta-Blocking to Improve Efficiency in Entity Resolution}
+
+
 \author{
   Tobias Ammann\\
-  \texttt{tag@adnm.ch}}
+  \texttt{tag@adnm.ch}\\
+  08-922-106}
 
 \date{\today}
+
+
 \maketitle
 
+\vspace{0.5 cm}
+
+\begin{center}
+Facharbeit Informatik (Inf 30)\\
+
+written at\\
+
+\vspace{0.2 cm}
+
+University of Zurich: Department of Informatics\\
+Prof. Dr. Michael B\"{o}hlen\\
+
+\vspace{0.2 cm}
+
+Supervisor: Pei Li  PhD
+\end{center}
+
+\vspace{1.2 cm}
+
 \begin{abstract}
-This paper compares two implementations of meta-blocking in terms of runtime and memory usage, and measures the accuracy of meta-blocking using a subset of the Musicbrainz database. We find that the implementation using a reversed index is more efficient than the naive implementation. Furthermore, we find that the dataset in its current form is unsuitable for meta-blocking, due to incomplete records and the presence of high-frequency tokens, which cause both implementations to approach $O(n^{2})$ runtime and memory consumption ($n$ being the number of records).
+This report compares two implementations of meta-blocking in terms of runtime and memory usage, and measures the accuracy of meta-blocking using a subset of the Musicbrainz database. We find that the implementation using a reversed index is more efficient than the naive implementation. Furthermore, we find that the dataset in its current form is unsuitable for meta-blocking, due to incomplete records and the presence of high-frequency tokens, which cause both implementations to approach $O(n^{2})$ runtime and memory consumption ($n$ being the number of records).
 \end{abstract}
 
+\end{titlepage}
+
+\newpage
+\tableofcontents
+
+\newpage
 \section{Introduction}
 Real world datasets often contain duplicate records representing the same entity. There are many reasons for this: data entry mistakes, merging of different data sources, etc. The task of finding these duplicates is called entity resolution (ER). The main problem of ER is its runtime complexity of $O(n^{2})$ ($n$ being the number of records), which makes it impractical to exhaustively compare all records with each other. The runtime cost can be improved by intelligently dividing records into blocks and only comparing records within the same block.
 One way to create such blocks is to assign all entities that share the same token to the same block, e.g. John Smith, Joe Smith, and Fred Smith are all assigned to the block "Smith". Meta-blocking \cite{10.1109/TKDE.2013.54} is an additional step that is inserted between the creation of the blocks and comparing the entities. Meta-blocking transforms one set of blocks into another set of blocks to further improve the efficiency of any blocking algorithm.
@@ -110,6 +141,7 @@ Given a set $\bar B$ of blocks, BATCH generates a graph $G(E, N)$ and prunes $G$
 \end{algorithmic}
 \end{algorithm}
 
+\newpage
 \subsection{Reverse Index Implementation}
 The $REVIDX$ implementation is based on \cite{10.1109/TKDE.2013.54}. $REVIDX$ does not keep track of the entire graph. Instead, it works on each input block separately. First, it calculates the weight of all edges and the number of distinct edges in a given block to compute the average weight. It then does a second scan during which it again calculates each edge weight and then adds all edges with an above average weight to the list of output blocks.
 
