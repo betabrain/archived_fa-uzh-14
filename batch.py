@@ -76,11 +76,6 @@ class timer(object):
         print >>sys.stderr, blessings.Terminal().yellow('timer: rss = {} MiB. (change: {} MiB).'.format(self.stop_rss/1048576.0, (self.stop_rss-self.start_rss)/1048576.0))
         print >>sys.stderr, blessings.Terminal().yellow('timer: disk = {} MiB. (change: {} MiB).'.format(self.stop_disk/1048576.0, (self.stop_disk-self.start_disk)/1048576.0))
         print >>sys.stderr
-        #stats[self.name+'.user']  = t_elapsed_user
-        #stats[self.name+'.sys']   = t_elapsed_sys
-        #stats[self.name+'.total'] = t_elapsed
-        #stats[self.name+'.rss'] = self.stop_rss
-        #stats[self.name+'.disk'] = self.stop_disk
         stats[self.name+'.Memory'] = self.stop_rss + self.stop_disk
         stats[self.name+'.Runtime'] = t_elapsed
 
@@ -107,11 +102,6 @@ def main():
         ''')
         db_w.commit()
 
-        #cu_w.execute('''
-        #    CREATE TABLE cluster (id INT, cluster INT)
-        #''')
-        #db_w.commit()
-
         if os.path.exists('batch.leveldb'):
             info('cleaning up old hashtable...')
             shutil.rmtree('batch.leveldb')
@@ -122,53 +112,6 @@ def main():
                                write_buffer_size=128*megabyte)
 
         info('databases ready.')
-
-        #info('reading blocks...')
-
-        # reading all data from the source database, preprocessing, and encoding.
-        # this results in a table of (profile, block) associations.
-        # Also extract the ground truth (profile, cluster) into another table for later.
-        #
-        #block_counts = collections.Counter()
-        #block_ids    = dict()
-
-        #not_none  = lambda v: v
-        #clean_str = lambda v: unicode(v).strip()
-        #not_empty = lambda v: len(v)
-
-        #ok_chars  = string.ascii_letters + string.digits + '- '
-        #sane_str  = lambda c: c in ok_chars
-
-        #for record in cu_s.execute('SELECT id, cluster, name, sort_name, type, area, gender, comment, begin_year, end_year from artist_sample order by cluster limit {};'.format(n_records)):
-        #    _id = int(record[0])
-        #    _cl = int(record[1])
-
-        #    tokens = filter(not_none, record[2:])
-        #    tokens = map(clean_str, tokens)
-        #    tokens = filter(not_empty, tokens)
-        #    tokens = u' '.join(tokens)
-        #    tokens = u''.join(filter(sane_str, tokens)).lower()
-        #    tokens = tokens.split()
-        #    tokens = set(tokens)
-
-        #    for token in tokens:
-        #        block_counts[token] += 1
-        #        block_id = block_ids.get(token, None)
-        #        if block_id == None:
-        #            block_id = len(block_ids)
-        #            block_ids[token] = block_id
-        #        cu_w.execute('INSERT INTO profile (id, cluster, block) VALUES (?, ?, ?);', (_id, _cl, block_id))
-
-        #db_w.commit()
-
-        #cu_w.execute('CREATE INDEX iprofblock ON profile (block);')
-        #db_w.commit()
-
-        #with codecs.open('blocks.txt', 'w', 'utf-8') as fh:
-        #    for value in block_ids:
-        #        print >>fh, value, block_counts[value]
-
-        #info('blocks extracted.')
 
         block_keys = {}
         block_to_value = {}
@@ -213,84 +156,6 @@ def main():
         cu_w.execute('CREATE INDEX iprofblock ON profile (block);')
         db_w.commit()
 
-        #n_associations = cu_w.execute('SELECT count(*) FROM profile;').fetchone()[0]
-        #n_blocks = cu_w.execute('SELECT count(DISTINCT block) FROM profile;').fetchone()[0]
-        #n_avg_assoc_per_block = float(n_associations) / n_blocks
-        #info('number of associations retreived.', n_associations=n_associations, n_blocks=n_blocks, n_avg_assoc_per_block=n_avg_assoc_per_block)
-
-        #info('removing bad blocks...')
-
-        ## some blocks contain too many profiles to be computationally feasable,
-        ## hence they need to be skipped.
-        ## furthermore, skip all blocks with just one profile.
-        ##
-        def fak(n):
-            return reduce(lambda x,y: x*y, xrange(1, n+1), 1)
-
-        def combs(n, k):
-            return fak(n)/fak(k)/fak(n-k)
-
-        #n_min_profiles = 2
-        #n_max_profiles = 1500 # why?
-
-        # first, collect some statistics.
-        #n_rare_profile_blocks = len(cu_w.execute('SELECT count(block) FROM profile GROUP BY block HAVING count(id) < {};'.format(n_min_profiles)).fetchall())
-        #n_frequent_profile_blocks = len(cu_w.execute('SELECT count(block) FROM profile GROUP BY block HAVING count(id) > {};'.format(n_max_profiles)).fetchall())
-
-        #info('collected bad blocks statistics', n_rare_profile_blocks=n_rare_profile_blocks, n_frequent_profile_blocks=n_frequent_profile_blocks)
-
-        #cu_w.execute('''
-        #    CREATE TABLE badblocks
-        #        AS SELECT block, count(id) AS count FROM profile GROUP BY block
-        #           HAVING count(id) < {} OR count(id) > {};
-        #'''.format(n_min_profiles, n_max_profiles))
-        #db_w.commit()
-
-        #cu_w.execute('CREATE INDEX ibb ON badblocks (block);')
-        #db_w.commit()
-
-        #cu_w.execute('CREATE INDEX ibc ON badblocks (count);')
-        #db_w.commit()
-
-        #n_edges_skipped = 0L
-        #n_bad_blocks = 0L
-
-        #ids2value = dict(map(lambda (a, b): (b, a), block_ids.items()))
-
-        #def mem(cnt):
-        #    cnt *= (cnt - 1)
-        #    cnt *= 8.0
-        #    if cnt < 1024: return str(int(cnt)) + 'B'
-        #    cnt /= 1024
-        #    if cnt < 1024: return str(int(cnt)) + 'KB'
-        #    cnt /= 1024
-        #    if cnt < 1024: return str(int(cnt)) + 'MB'
-        #    cnt /= 1024
-        #    if cnt < 1024: return str(int(cnt)) + 'GB'
-        #    cnt /= 1024
-        #    return str(int(cnt)) + 'TB'
-
-
-        #with codecs.open('badblocks.txt', 'w', 'utf-8') as fh:
-        #    for block, count in cu_w.execute('SELECT block, count FROM badblocks ORDER BY count DESC;'):
-        #        n_bad_blocks += 1
-        #        n_edges_skipped += combs(count, 2)
-        #    pprint >>fh, '\t'.join([str(block), str(count), mem(count), ids2value[block]])
-
-        #cu_w.execute('''
-        #    CREATE TABLE clean_profile
-        #        AS SELECT p.id, p.block FROM profile AS p
-        #           WHERE NOT EXISTS(SELECT * FROM badblocks WHERE block=p.block);
-        #''')
-        #db_w.commit()
-
-        #n_clean_associations = cu_w.execute('SELECT count(*) FROM clean_profile;').fetchone()[0]
-        #n_clean_blocks = cu_w.execute('SELECT count(DISTINCT block) FROM clean_profile;').fetchone()[0]
-        #n_avg_clean_assoc_per_block = float(n_clean_associations) / n_clean_blocks
-
-        #info('bad blocks removed.', n_bad_blocks=n_bad_blocks, n_edges_skipped=n_edges_skipped, \
-        #     n_clean_associations=n_clean_associations, n_clean_blocks=n_clean_blocks, \
-        #     n_avg_clean_assoc_per_block=n_avg_clean_assoc_per_block)
 
     with timer('Graph'):
         info('creating graph...')
@@ -349,10 +214,6 @@ def main():
 
             info('edges inserted.', n_edges=n_edges)
 
-        #cu_w.execute('DROP TABLE clean_profile;')
-        #db_w.commit()
-
-        #info('temporary table "clean_profile" dropped.')
 
         with timer('meta 2-counting'):
 
@@ -416,35 +277,11 @@ def main():
         ''', (avg_weight,))
         db_w.commit()
 
-        #n_edges_remaining = cu_w.execute('SELECT count(*) FROM edges;').fetchone()[0]
-
-        #info('graph pruned.', n_edges_remaining=n_edges_remaining)
-
-        #with codecs.open('edges.txt', 'w', 'utf-8') as fh:
-        #    for p1, p2, w in cu_w.execute('SELECT n1, n2, weight FROM edges ORDER BY n1, n2;'):
-        #        print >>fh, p1, p2, w
-
         info('edges saved.')
 
 
     with timer('Scoring'):
         info('scoring metablocking run...')
-
-        # calculate the f-measure for the output blocks.
-        # calculate the accuracy and efficiency of the current metablocking run.
-        # 1. PC "pair completeness": Dout / Din
-        #    with D.. = number duplicates that share at least one block.
-        #
-        # 2. RR "reduction ratio": 1 - (Cout / Cin)
-        #    with C.. = number of comparisons
-        #
-        # 3. PQ "pairs quality": Dout / Cout
-
-        #cluster_pairs = set(cu_w.execute('''
-        #    SELECT DISTINCT p1.id, p2.id FROM profile AS p1, profile AS p2
-        #      WHERE p1.cluster = p2.cluster AND
-        #            p1.id < p2.id;
-        #''').fetchall())
 
         ground_truth = map(lambda entities: set(itertools.combinations(sorted(entities), 2)), clusters.values())
         while len(ground_truth) > 1:
@@ -464,14 +301,6 @@ def main():
 
         n_cluster_pairs = len(ground_truth)
         n_meta_pairs = len(meta_pairs)
-
-        #with codecs.open('cluster-pairs.txt', 'w', 'utf-8') as fh:
-        #    for p1, p2 in sorted(cluster_pairs):
-        #        print >>fh, p1, p2
-
-        #with codecs.open('metablocking-pairs.txt', 'w', 'utf-8') as fh:
-        #    for p1, p2 in sorted(meta_pairs):
-        #        print >>fh, p1, p2
 
         # true positive: PAIR found in INPUT and OUTPUT blocks.
         n_true_positive = len(ground_truth.intersection(meta_pairs))
@@ -525,34 +354,6 @@ def main():
         stats['RR'] = RR
         stats['PQ'] = PQ
 
-        info('metablocking run analysed.', \
-             _0={
-                 'n_cluster_pairs': n_cluster_pairs,
-                 'n_meta_pairs': n_meta_pairs,
-                 }, \
-             _1={
-                 'n_true_positive': n_true_positive,
-                 'n_false_positive': n_false_positive,
-                 'n_true_negative': n_true_negative,
-                 'n_false_negative': n_false_negative,
-                 }, \
-             _2={
-                 'precision': precision,
-                 'recall': recall,
-                 }, \
-             _3={
-                 'f_measure': f_measure,
-                 }, \
-             _4={
-                 'PC': PC,
-                 #'RR_complete': RR_complete,
-                 #'RR_cheating': RR_cheating,
-                 'RR': RR,
-                 'PQ': PQ,
-                 })
-
-        info('work completed.')
-
         cu_w.close()
         db_w.close()
 
@@ -561,7 +362,6 @@ def main():
 main()
 
 time_stopped = time.clock()
-#stats['time_stopped'] = time_stopped
 stats['Overall Runtime.Runtime'] = time_stopped - time_started
 
 print 'BATCH', stats

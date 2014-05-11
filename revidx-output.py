@@ -136,11 +136,6 @@ with timer('Setup'):
 
                         table[_id].add(block)
 
-    #cu.close()
-    #db.close()
-    #del cu, db
-
-
     print >>err, c('# step 1: transform the table into a collection of blocks')
     print >>err, c('#         (this is not part of metablocking)')
     print >>err
@@ -178,57 +173,33 @@ def build_rev_idx(blocks):
 with timer('RevIdx'):
     rev_idx = build_rev_idx(blocks)
 
-#print 'REVERSE INDEX:'
-#show(rev_idx, e, b)
-#print
-
 print >>err, c('# meta 2: calculate the "total_weight", "n_distinct_edges",')
 print >>err, c('#         and "avg_weight" by iterating through all blocks')
 print >>err, c('#         in sorted order.')
 print >>err
 
 def get_weight(block, e1, e2):
-    #print '    \- get_weight:', '(current:', b(block), ')', \
-    #                            e(e1), ' '*(10-len(str(e1))), '-', \
-    #                            e(e2), ' '*(10-len(str(e2)))
-
     blocks_e1 = rev_idx[e1]
     blocks_e2 = rev_idx[e2]
-
-    #print '           \- rev_idx[e1]:', e(e1), '.'*(15-len(str(e1))), '[', \
-    #                                    ' '.join(map(b, blocks_e1)), ']'
-    #print '           \- rev_idx[e2]:', e(e2), '.'*(15-len(str(e2))), '[', \
-    #                                    ' '.join(map(b, blocks_e2)), ']'
-    #print '           |'
 
     common_blocks = 0L
     first_common = False
     for b1 in blocks_e1:
         for b2 in blocks_e2:
-            #print '           |', b(b1), ' '*(10-len(str(b1))), '==', \
-            #                      b(b2), ' '*(10-len(str(b2))),
-
-
             if b1 == b2:
                 common_blocks += 1
 
                 if not first_common:
-                    # print '&     first common',
                     first_common = True
                     if b1 != block:
-                        # print '& NOT current block => return -1.'
                         return -1 # error code
                     else:
-                        # print '&     current block => continue.'
                         pass
                 else:
-                    # print '& NOT first common => continue.'
                     pass
             else:
-                # print '=> skip.'
                 pass
 
-    #print '           | return', common_blocks
     return common_blocks
 
 with timer('Graph'):
@@ -248,9 +219,6 @@ with timer('Graph'):
     print >>err, ' - n_distinct_edges:', n_distinct_edges
     print >>err, ' - average_weight:  ', average_weight
     print >>err
-    stats['Total Weight.N'] = total_weight
-    stats['Distinct Edges.N'] = n_distinct_edges
-    stats['Average Weight.N'] = average_weight
 
 print >>err, c('# meta 3: re-iterate through all blocks and apply the pruning')
 print >>err, c('#         criterion. create the output blocks.')
@@ -258,7 +226,6 @@ print >>err
 
 
 with timer('Pruning'):
-    # print 'APPLY PRUNING CRITERION AND OUTPUT NEW BLOCKS'
     new_blocks = hashtable(set)
 
     for block, entities in sorted(blocks.items()):
@@ -286,13 +253,6 @@ with timer('Scoring'):
             ground_truth.append(tmp)
     ground_truth = ground_truth[0]
 
-    print >>err, '# ground_truth:', len(ground_truth)
-    stats['Ground Truth Entity Pairs.N'] = len(ground_truth)
-
-    #all_comparisons = set()
-    #for block, comparisons in new_blocks.items():
-    #    all_comparisons = all_comparisons.union(comparisons)
-
     all_comparisons = list(new_blocks.values())
     while len(all_comparisons) > 1:
         for _ in xrange(len(all_comparisons)/2):
@@ -300,14 +260,6 @@ with timer('Scoring'):
             tmp = tmp.union(all_comparisons.pop(0))
             all_comparisons.append(tmp)
     all_comparisons = all_comparisons[0]
-    stats['Output Entity Pairs.N'] = len(all_comparisons)
-
-    #all_comparisons = list(new_blocks.values())
-    #chunks = lambda l, n: [l[x: x+n] for x in xrange(0, len(l), n)]
-
-    #while len(all_comparisons) > 1:
-    #    all_comparisons = map(_merge, chunks(all_comparisons, 2))
-    #all_comparisons = all_comparisons[0]
 
     def lasa(value):
         try:
@@ -317,9 +269,6 @@ with timer('Scoring'):
                 return value
         except:
             return value
-
-    print >>err, '# all_comparisons:', len(all_comparisons)
-    print >>err
 
     tp_pairs = list(ground_truth.intersection(all_comparisons))
     fp_pairs = list(all_comparisons - ground_truth)
@@ -371,41 +320,5 @@ with timer('Scoring'):
         print >>fh, tabulate(fn_tab, headers=headers, tablefmt='latex')
 
 
-
-    n_true_positive += len(tp_pairs)
-    n_false_positive = len(fp_pairs)
-    n_false_negative = len(fn_pairs)
-
-    stats['True Positives.N'] = n_true_positive
-    stats['False Positives.N'] = n_false_positive
-    stats['False Negatives.N'] = n_false_negative
-
-    recall = float(n_true_positive) / (n_true_positive + n_false_negative)
-    precision = float(n_true_positive) / (n_true_positive + n_false_positive)
-    f_measure = 2 * precision * recall / (precision + recall)
-
-    print >>err, 'MEASURING QUALITY'
-    print >>err, ' - recall:   ', recall
-    print >>err, ' - precision:', precision
-    print >>err, ' - f-measure:', f_measure
-    print >>err
-
-    stats['Recall.Recall'] = recall
-    stats['Precision.Precision'] = precision
-    stats['F-Measure.F-Measure'] = f_measure
-
-time_stopped = clock()
-#stats['time_stopped'] = time_stopped
-stats['Overall Runtime.Runtime'] = time_stopped - time_started
-
-print 'REVIDX', stats
-
-for a, b in all_combinations([11,1,2,3,4,5,6,7,8,9,10]):
-    if a < b:
-        print '<',
-    else:
-        print '>',
-print
-print
 
 
